@@ -1,0 +1,7 @@
+name: aws-bootstrap
+runtime: nodejs
+description: an api on aws deployed in an EC2 instance
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: https://www.pulumi.com/ai/api/project/ef254386-67aa-4555-8694-aea60c1942e4.zip
