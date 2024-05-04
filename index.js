@@ -1,5 +1,5 @@
 const aws = require("@pulumi/aws");
-
+const pulumi = require("@pulumi/pulumi");
 const size = "t2.micro"; // for example
 const ami = "ami-07caf09b362be10b8"; // update to your preferred AMI
 
