@@ -22,7 +22,8 @@ Parameters:
   GitHubPersonalAccessToken:
     Type: String
     NoEcho: true
-    Description: 'A GitHub personal access token with "repo" anadmin:repo_hook" permissions.'
+    Description: 'A GitHub personal access token with "repo" and
+"admin:repo_hook" permissions.'
 
 
 Resources:
@@ -119,17 +120,15 @@ Resources:
 
   StagingDeploymentGroup:
     Type: AWS::CodeDeploy::DeploymentGroup
-    DependsOn: Instance
     Properties:
       DeploymentGroupName: staging
+      AutoScalingGroups:
+        - !Ref ScalingGroup
       ApplicationName: !Ref DeploymentApplication
       DeploymentConfigName: CodeDeployDefault.AllAtOnce
       ServiceRoleArn: !GetAtt DeploymentRole.Arn
-      Ec2TagFilters:
-        - Key: aws:cloudformation:stack-name
-          Type: KEY_AND_VALUE
-          Value: !Ref AWS::StackName
-
+    
+      
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
@@ -317,42 +316,51 @@ Resources:
       VpcId: !Ref VPC
       HealthCheckEnabled: true
       HealthCheckProtocol: HTTP
-      Targets:
-        - Id: !Ref Instance
-        - Id: !Ref Instance2
       Tags:
         - Key: Name
           Value: !Ref AWS::StackName
 
-  Instance:
-    Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT5M
-        Count: 1
+  ScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: "1"
+        MaxBatchSize: "1"
+        PauseTime: "PT15M"
+        WaitOnResourceSignals: "true"
+        SuspendProcesses:
+          - HealthCheck
+          - ReplaceUnhealthy
+          - AZRebalance
+          - AlarmNotification
+          - ScheduledActions
     Properties:
-      SubnetId: !Ref SubnetAZ1
+      AutoScalingGroupName: !Sub 'ASG_${AWS::StackName}'
+      AvailabilityZones:
+        - !Select [ 0, !GetAZs '' ]
+        - !Select [ 1, !GetAZs '' ]
+      MinSize: 2
+      MaxSize: 6
+      HealthCheckGracePeriod: 0
+      HealthCheckType: ELB
       LaunchTemplate:
         LaunchTemplateId: !Ref InstanceLaunchTemplate
         Version: !GetAtt InstanceLaunchTemplate.LatestVersionNumber
+      TargetGroupARNs:
+        - !Ref LoadBalancerTargetGroup
+      MetricsCollection:
+        -
+          Granularity: "1Minute"
+          Metrics:
+            - "GroupMaxSize"
+            - "GroupInServiceInstances"
+      VPCZoneIdentifier:
+        - !Ref SubnetAZ1
+        - !Ref SubnetAZ2
       Tags:
         - Key: Name
           Value: !Ref AWS::StackName
-
-  Instance2:
-    Type: AWS::EC2::Instance
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT5M
-        Count: 1
-    Properties:
-      SubnetId: !Ref SubnetAZ2
-      LaunchTemplate:
-        LaunchTemplateId: !Ref InstanceLaunchTemplate
-        Version: !GetAtt InstanceLaunchTemplate.LatestVersionNumber
-      Tags:
-        - Key: Name
-          Value: !Ref AWS::StackName
+          PropagateAtLaunch: "true" 
 
   InstanceLaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
@@ -435,4 +443,4 @@ Outputs:
     Description: The DNS name for the LB
     Value: !Sub "http://${LoadBalancer.DNSName}:80"
     Export:
-      Name: LBEndpoint
+      Name: LBendpoint
